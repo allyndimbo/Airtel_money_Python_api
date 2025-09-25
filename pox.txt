@@ -1,32 +1,37 @@
 <?php
-// ================= CONFIG (single file) =================
+// ================= CONFIG =================
 $host = "localhost";
 $user = "root";
 $pass = "Act@2022**";
 $dbname = "act";
 $table = "members"; // <-- change this
 $basePhotoPath = "storage/uploads/"; // For picture column
-// =======================================================
+// ==========================================
+
+// Enable errors (for debugging)
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 $conn = new mysqli($host, $user, $pass, $dbname);
 if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+    die("❌ DB Connection failed: " . $conn->connect_error);
 }
 
+// Run query
 $sql = "SELECT * FROM `$table`";
 $result = $conn->query($sql);
 
 if (!$result) {
-    die("Query error: " . $conn->error);
+    die("❌ Query error: " . $conn->error . "<br>SQL: " . $sql);
 }
 
 if ($result->num_rows === 0) {
-    echo "No records found.";
+    echo "⚠️ No records found in table `$table`.";
     $conn->close();
     exit;
 }
 
-// Build table header dynamically, then add Face/Face Name/Photo
+// Build table header dynamically + add Face/Face Name/Photo
 $fields = $result->fetch_fields();
 
 echo "<table border='1' cellpadding='5' cellspacing='0'>";
@@ -37,52 +42,59 @@ foreach ($fields as $f) {
 echo "<th>Face</th><th>Face Name</th><th>Photo</th>";
 echo "</tr>";
 
-// Output rows
 while ($row = $result->fetch_assoc()) {
     $face = "";
     $face_name = "";
+
+    // Decode room_info JSON
     if (!empty($row['room_info'])) {
-        $roomInfo = is_string($row['room_info']) ? json_decode($row['room_info'], true) : $row['room_info'];
+        $roomInfo = json_decode($row['room_info'], true);
+
+        // Debug if JSON fails
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            echo "<!-- ⚠️ JSON decode error: " . json_last_error_msg() . " -->";
+        }
+
         if (is_array($roomInfo)) {
-            if (!empty($roomInfo['photo'])) {
-                // Use exactly as stored in DB (already "storage/faces/...")
-                $face = $roomInfo['photo'];
-            }
-            if (!empty($roomInfo['name'])) {
-                $face_name = $roomInfo['name'];
-            }
+            $face = !empty($roomInfo['photo']) ? $roomInfo['photo'] : "";
+            $face_name = !empty($roomInfo['name']) ? $roomInfo['name'] : "";
         }
     }
 
-    // Prepare full path for picture column (prepend storage/uploads/)
+    // Build full path for picture (prepend uploads/)
     $photo = "";
     if (!empty($row['picture'])) {
         $photo = $basePhotoPath . ltrim($row['picture'], '/');
     }
 
     echo "<tr>";
-    // print all original columns
+
+    // Print all DB columns
     foreach ($fields as $f) {
         $col = $f->name;
         $val = isset($row[$col]) ? $row[$col] : "";
         echo "<td>" . htmlspecialchars($val) . "</td>";
     }
 
-    // Face (direct DB path + image)
+    // Face
     if ($face !== "") {
-        echo "<td><a href='" . htmlspecialchars($face) . "' target='_blank'><img src='" . htmlspecialchars($face) . "' width='50' height='50'></a><br>" . htmlspecialchars($face) . "</td>";
+        echo "<td><a href='" . htmlspecialchars($face) . "' target='_blank'>
+                <img src='" . htmlspecialchars($face) . "' width='50' height='50'>
+              </a><br>" . htmlspecialchars($face) . "</td>";
     } else {
-        echo "<td>No Face</td>";
+        echo "<td>❌ No Face</td>";
     }
 
     // Face Name
-    echo "<td>" . htmlspecialchars($face_name) . "</td>";
+    echo "<td>" . ($face_name !== "" ? htmlspecialchars($face_name) : "❌ No Name") . "</td>";
 
-    // Photo (prepend uploads/ + image)
+    // Photo
     if ($photo !== "") {
-        echo "<td><a href='" . htmlspecialchars($photo) . "' target='_blank'><img src='" . htmlspecialchars($photo) . "' width='50' height='50'></a><br>" . htmlspecialchars($photo) . "</td>";
+        echo "<td><a href='" . htmlspecialchars($photo) . "' target='_blank'>
+                <img src='" . htmlspecialchars($photo) . "' width='50' height='50'>
+              </a><br>" . htmlspecialchars($photo) . "</td>";
     } else {
-        echo "<td>No Photo</td>";
+        echo "<td>❌ No Photo</td>";
     }
 
     echo "</tr>";
